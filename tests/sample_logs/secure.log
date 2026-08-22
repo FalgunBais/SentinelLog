@@ -1,0 +1,4 @@
+Oct 14 14:10:01 centos-box sshd[4401]: Accepted password for root from 192.168.1.100 port 2222 ssh2
+Oct 14 14:11:15 centos-box sshd[4405]: Failed password for invalid user guest from 45.142.214.19 port 33120 ssh2
+Oct 14 14:11:18 centos-box sshd[4406]: Invalid user test from 45.142.214.19 port 33121
+Oct 14 14:12:00 centos-box systemd-logind[100]: New session 5 of user ubuntu.

@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SentinelLog — Real-Time Security Log Analyzer & Threat Detection</title>
+  
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <!-- SentinelLog SOC Dark Theme -->
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+
+  <!-- Navigation Bar -->
+  <header class="navbar">
+    <div class="brand">
+      <div class="brand-icon">🛡️</div>
+      <div>
+        <div class="brand-name">Sentinel<span>Log</span></div>
+      </div>
+      <span class="brand-tag">v{{ version }}</span>
+    </div>
+
+    <div class="nav-center">
+      <!-- Mode Badge -->
+      {% if mode == 'demo' %}
+      <div class="mode-badge demo" id="modeBadge">
+        <span>⚡</span> DEMO MODE — SIMULATED SECURITY EVENTS
+      </div>
+      {% else %}
+      <div class="mode-badge live" id="modeBadge">
+        <span>🟢</span> LIVE MODE — SYSTEM LOG MONITORING
+      </div>
+      {% endif %}
+
+      <!-- System Status Indicator -->
+      <div class="system-status" id="systemStatus">
+        <span class="status-dot green" id="statusDot"></span>
+        <span id="statusText">SYSTEM MONITORING</span>
+      </div>
+    </div>
+
+    <div class="nav-actions">
+      <!-- Export Menu -->
+      <button class="btn btn-primary btn-sm" id="btnExportMenu" onclick="toggleExportMenu()">
+        <span>📥</span> Export Report ▾
+      </button>
+      <div id="exportDropdown" style="display: none; position: absolute; right: 80px; top: 55px; background: #0c121d; border: 1px solid var(--border-glow); border-radius: var(--radius-sm); padding: 5px; z-index: 500; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+        <a href="/api/export/events" class="btn btn-sm" style="display: block; margin-bottom: 3px; text-decoration: none;">📄 Export Events (CSV)</a>
+        <a href="/api/export/alerts" class="btn btn-sm" style="display: block; margin-bottom: 3px; text-decoration: none;">🚨 Export Alerts (JSON)</a>
+        <a href="/api/export/report" class="btn btn-sm" style="display: block; text-decoration: none;">📊 Security Summary (MD)</a>
+      </div>
+
+      <button class="btn btn-danger btn-sm" onclick="resetDatabase()" title="Reset local database events & alerts">
+        <span>🗑️</span> Clear Data
+      </button>
+    </div>
+  </header>
+
+  <!-- Simulation Control Bar -->
+  <section class="control-bar">
+    <div class="simulation-controls">
+      <span class="control-label">⚡ Attack Scenarios:</span>
+      <button class="btn btn-sm btn-danger" onclick="triggerScenario('brute_force')">💥 SSH Brute-Force</button>
+      <button class="btn btn-sm btn-warning" onclick="triggerScenario('user_spraying')">🎯 Credential Spray</button>
+      <button class="btn btn-sm btn-danger" onclick="triggerScenario('compromise')">⚠️ Suspicious Compromise</button>
+      <button class="btn btn-sm btn-warning" onclick="triggerScenario('rapid_spike')">📈 Velocity Burst</button>
+      <button class="btn btn-sm" onclick="triggerScenario('invalid_probe')">🔍 Invalid User Probe</button>
+      <button class="btn btn-sm" onclick="triggerScenario('benign')">✅ Benign Login</button>
+    </div>
+
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <button class="btn btn-sm" id="btnDemoToggle" onclick="toggleDemoStream()">
+        <span id="demoToggleIcon">⏸️</span> <span id="demoToggleText">Pause Demo Stream</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Main Dashboard Container -->
+  <main class="dashboard-container">
+    
+    <!-- Top KPI Cards -->
+    <div class="kpi-grid">
+      <!-- 1. Total Events -->
+      <div class="kpi-card blue">
+        <div class="kpi-header">
+          <span>Total Processed Events</span>
+          <span class="kpi-icon">📋</span>
+        </div>
+        <div class="kpi-value" id="kpiTotalEvents">{{ stats.total_events }}</div>
+        <div class="kpi-footer">Ingested & Analyzed in Real Time</div>
+      </div>
+
+      <!-- 2. Successful Logins -->
+      <div class="kpi-card green">
+        <div class="kpi-header">
+          <span>Successful Logins</span>
+          <span class="kpi-icon">✅</span>
+        </div>
+        <div class="kpi-value" id="kpiSuccessLogins">{{ stats.successful_logins }}</div>
+        <div class="kpi-footer">Authorized Authentications</div>
+      </div>
+
+      <!-- 3. Failed & Invalid Logins -->
+      <div class="kpi-card amber">
+        <div class="kpi-header">
+          <span>Failed / Invalid Logins</span>
+          <span class="kpi-icon">❌</span>
+        </div>
+        <div class="kpi-value" id="kpiFailedLogins">{{ stats.failed_logins + stats.invalid_logins }}</div>
+        <div class="kpi-footer"><span id="kpiInvalidSub">{{ stats.invalid_logins }}</span> Invalid User Probes</div>
+      </div>
+
+      <!-- 4. Active Threats -->
+      <div class="kpi-card red">
+        <div class="kpi-header">
+          <span>Active Threat Alerts</span>
+          <span class="kpi-icon">🚨</span>
+        </div>
+        <div class="kpi-value" id="kpiActiveThreats">{{ stats.active_threats }}</div>
+        <div class="kpi-footer"><span id="kpiHighCritSub">{{ stats.high_critical_alerts }}</span> High & Critical Severity</div>
+      </div>
+
+      <!-- 5. Monitored IPs -->
+      <div class="kpi-card purple">
+        <div class="kpi-header">
+          <span>Monitored Unique IPs</span>
+          <span class="kpi-icon">🌐</span>
+        </div>
+        <div class="kpi-value" id="kpiUniqueIps">{{ stats.unique_ips }}</div>
+        <div class="kpi-footer">Source Hosts Monitored</div>
+      </div>
+    </div>
+
+    <!-- Analytical Visualizations Grid -->
+    <div class="charts-grid">
+      <!-- Chart 1: Auth Status Breakdown -->
+      <div class="chart-card">
+        <div class="card-header">
+          <div class="card-title"><span>📊</span> Authentication Distribution</div>
+        </div>
+        <div class="chart-container">
+          <canvas id="authRatioChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 2: Activity Timeline -->
+      <div class="chart-card wide">
+        <div class="card-header">
+          <div class="card-title"><span>📈</span> Authentication Velocity & Activity Timeline</div>
+        </div>
+        <div class="chart-container">
+          <canvas id="timelineChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 3: Severity Breakdown -->
+      <div class="chart-card">
+        <div class="card-header">
+          <div class="card-title"><span>🛡️</span> Severity Distribution</div>
+        </div>
+        <div class="chart-container">
+          <canvas id="severityChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 4: Top Attacking IPs -->
+      <div class="chart-card">
+        <div class="card-header">
+          <div class="card-title"><span>🔥</span> Top Suspicious Source IPs</div>
+        </div>
+        <div class="chart-container">
+          <canvas id="topIpsChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Split Panel: Live Event Feed vs Threat Alerts -->
+    <div class="monitoring-split">
+      
+      <!-- Left Panel: Real-Time Event Feed -->
+      <div class="panel-card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>📡</span> Live Security Event Feed
+          </div>
+          <span class="badge badge-low" id="liveFeedStatus">● LIVE STREAM ACTIVE</span>
+        </div>
+
+        <!-- Table Toolbar -->
+        <div class="table-toolbar">
+          <div class="search-box">
+            <span>🔍</span>
+            <input type="text" id="eventSearch" placeholder="Search IP, username, message..." oninput="handleSearch()">
+          </div>
+          
+          <select class="filter-select" id="severityFilter" onchange="handleFilterChange()">
+            <option value="ALL">All Severities</option>
+            <option value="LOW">LOW</option>
+            <option value="MEDIUM">MEDIUM</option>
+            <option value="HIGH">HIGH</option>
+            <option value="CRITICAL">CRITICAL</option>
+          </select>
+
+          <button class="btn btn-sm" onclick="refreshEvents()">🔄 Refresh</button>
+        </div>
+
+        <!-- Event Feed Table -->
+        <div class="table-wrapper">
+          <table class="soc-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Source IP</th>
+                <th>Username</th>
+                <th>Event Type</th>
+                <th>Service</th>
+                <th>Severity</th>
+                <th>Status</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody id="eventsTableBody">
+              <!-- Dynamically populated rows -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Right Panel: Threat Alerts Management -->
+      <div class="panel-card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>🚨</span> Active Threat Alerts
+          </div>
+          <button class="btn btn-sm" onclick="clearAcknowledgedAlerts()" title="Archive acknowledged alerts">
+            Clear Ack
+          </button>
+        </div>
+
+        <!-- Alert Filter Tabs -->
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.8rem;">
+          <button class="btn btn-sm btn-primary" id="tabAlertsActive" onclick="switchAlertTab('ACTIVE')">Active</button>
+          <button class="btn btn-sm" id="tabAlertsAll" onclick="switchAlertTab('ALL')">All</button>
+          <button class="btn btn-sm" id="tabAlertsAck" onclick="switchAlertTab('ACKNOWLEDGED')">Acknowledged</button>
+        </div>
+
+        <!-- Alerts Container -->
+        <div class="alerts-list" id="alertsList">
+          <!-- Dynamically populated alerts -->
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Deep IP Investigation Modal -->
+  <div class="modal-backdrop" id="ipModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span>🌐 IP Forensic Dossier:</span>
+          <span id="modalIpAddress" style="color: var(--text-highlight); font-family: var(--font-mono);"></span>
+          <span class="badge" id="modalIpClassBadge"></span>
+        </div>
+        <button class="modal-close" onclick="closeIpModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        
+        <!-- Dossier Metrics Grid -->
+        <div class="ip-dossier-grid">
+          <div class="dossier-stat">
+            <div class="dossier-stat-label">Calculated Risk Score</div>
+            <div class="dossier-stat-val" id="modalRiskScore">0</div>
+          </div>
+          <div class="dossier-stat">
+            <div class="dossier-stat-label">Total Attempts</div>
+            <div class="dossier-stat-val" id="modalTotalAttempts">0</div>
+          </div>
+          <div class="dossier-stat">
+            <div class="dossier-stat-label">Failed / Invalid</div>
+            <div class="dossier-stat-val" style="color: #fda4af;" id="modalFailedAttempts">0</div>
+          </div>
+          <div class="dossier-stat">
+            <div class="dossier-stat-label">Successful</div>
+            <div class="dossier-stat-val" style="color: #34d399;" id="modalSuccessAttempts">0</div>
+          </div>
+          <div class="dossier-stat">
+            <div class="dossier-stat-label">First Seen</div>
+            <div class="dossier-stat-val" style="font-size: 0.85rem;" id="modalFirstSeen">-</div>
+          </div>
+          <div class="dossier-stat">
+            <div class="dossier-stat-label">Last Seen</div>
+            <div class="dossier-stat-val" style="font-size: 0.85rem;" id="modalLastSeen">-</div>
+          </div>
+        </div>
+
+        <!-- Targeted Usernames -->
+        <div>
+          <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem;">
+            Targeted Usernames:
+          </div>
+          <div id="modalTargetedUsers" style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+            <!-- User tags -->
+          </div>
+        </div>
+
+        <!-- Associated Alerts -->
+        <div>
+          <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem;">
+            Associated Security Alerts:
+          </div>
+          <div id="modalAssociatedAlerts" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 160px; overflow-y: auto;">
+            <!-- Associated alerts -->
+          </div>
+        </div>
+
+        <!-- IP Event History Table -->
+        <div>
+          <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem;">
+            Recent Event Trail:
+          </div>
+          <div style="max-height: 180px; overflow-y: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);">
+            <table class="soc-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>User</th>
+                  <th>Event</th>
+                  <th>Status</th>
+                  <th>Severity</th>
+                </tr>
+              </thead>
+              <tbody id="modalEventsTableBody">
+                <!-- IP Events -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- SentinelLog Dashboard Logic -->
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

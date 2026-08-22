@@ -1,0 +1,72 @@
+{
+  "app": {
+    "name": "SentinelLog",
+    "version": "1.0.0",
+    "mode": "demo",
+    "host": "127.0.0.1",
+    "port": 5000,
+    "debug": false
+  },
+  "logging": {
+    "log_file": "sample_auth.log",
+    "tail_from_end": true,
+    "poll_interval_seconds": 0.5
+  },
+  "database": {
+    "db_path": "sentinel.db"
+  },
+  "detection": {
+    "brute_force": {
+      "failed_attempts_threshold": 5,
+      "time_window_seconds": 300,
+      "risk_score": 40,
+      "severity": "HIGH"
+    },
+    "user_spraying": {
+      "unique_users_threshold": 3,
+      "time_window_seconds": 300,
+      "risk_score": 25,
+      "severity": "HIGH"
+    },
+    "rapid_spike": {
+      "attempt_threshold": 8,
+      "time_window_seconds": 30,
+      "risk_score": 20,
+      "severity": "HIGH"
+    },
+    "suspicious_success": {
+      "prior_failures_threshold": 3,
+      "time_window_seconds": 300,
+      "risk_score": 30,
+      "severity": "CRITICAL"
+    },
+    "invalid_user_probe": {
+      "failed_attempts_threshold": 3,
+      "time_window_seconds": 300,
+      "risk_score": 15,
+      "severity": "MEDIUM"
+    }
+  },
+  "scoring": {
+    "base_scores": {
+      "FAILED_LOGIN": 10,
+      "INVALID_USER": 15,
+      "RAPID_ATTEMPTS": 20,
+      "MULTIPLE_USERS": 25,
+      "BRUTE_FORCE": 40,
+      "SUSPICIOUS_SUCCESS": 30,
+      "SSH_AUTH_FAILURE": 10
+    },
+    "severity_thresholds": {
+      "LOW": 0,
+      "MEDIUM": 30,
+      "HIGH": 60,
+      "CRITICAL": 85
+    }
+  },
+  "demo": {
+    "event_interval_seconds": 2.0,
+    "attack_probability": 0.35,
+    "realistic_jitter": true
+  }
+}
